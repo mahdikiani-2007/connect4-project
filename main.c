@@ -41,6 +41,19 @@ void print_board(GameBoard *board) {
     printf("\n\n");
 }
 
+// تابع اصلی سقوط مهره در پایین‌ترین خانه خالی ستون
+// خروجی: اگر حرکت موفق بود ۱ و اگر ستون پر بود ۰ برمی‌گرداند
+int drop_piece(GameBoard *board, int col, char token) {
+    // از پایین‌ترین سطر شروع می‌کنیم و به سمت بالا می‌آییم
+    for (int i = board->rows - 1; i >= 0; i--) {
+        if (board->grid[i][col] == '.') {
+            board->grid[i][col] = token;
+            return 1; // حرکت موفقیت‌آمیز بود
+        }
+    }
+    return 0; // ستون پر است
+}
+
 int main() {
     int r, c;
 
@@ -60,11 +73,42 @@ int main() {
         }
     }
 
-    // ساخت و نمایش زمین
     GameBoard *board = create_board(r, c);
     print_board(board);
 
-    // آزاد کردن حافظه در پایان (برای جلوگیری از Memory Leak)
+    // یک حلقه ساده برای تست نوبت بازیکن‌ها و سقوط مهره‌ها
+    char current_token = 'X'; // بازیکن اول X و بازیکن دوم O
+    int turn = 0;
+    int max_turns = r * c;
+
+    while (turn < max_turns) {
+        int selected_col;
+        printf("نوبت بازیکن (%c). شماره ستون (0 تا %d) را انتخاب کنید: ", current_token, c - 1);
+
+        if (scanf("%d", &selected_col) != 1) {
+            printf("ورودی نامعتبر! لطفا یک عدد وارد کنید.\n");
+            while(getchar() != '\n');
+            continue;
+        }
+
+        // اعتبارسنجی محدوده ستون
+        if (selected_col < 0 || selected_col >= c) {
+            printf("خطا: شماره ستون خارج از محدوده است! دوباره تلاش کنید.\n");
+            continue;
+        }
+
+        // تلاش برای انداختن مهره
+        if (drop_piece(board, selected_col, current_token)) {
+            print_board(board);
+            // عوض کردن نوبت بازیکن
+            current_token = (current_token == 'X') ? 'O' : 'X';
+            turn++;
+        } else {
+            printf("خطا: این ستون کاملاً پر شده است! ستون دیگری انتخاب کنید.\n");
+        }
+    }
+
+    // آزاد کردن حافظه
     for (int i = 0; i < board->rows; i++) {
         free(board->grid[i]);
     }
