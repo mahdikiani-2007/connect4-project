@@ -1,14 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct {
+// 1. تعریف ساختار وضعیت بازی (طبق داکیومنت)
+typedef struct GameState {
     int rows;
     int cols;
     char **grid;
-} GameBoard;
+} GameState;
 
-GameBoard* create_board(int r, int c) {
-    GameBoard *board = (GameBoard*)malloc(sizeof(GameBoard));
+// 2. تعریف پوینتر تابع برای حرکت (طبق داکیومنت)
+// این تابع وضعیت بازی را می‌گیرد و شماره ستون انتخابی را برمی‌گرداند
+typedef int (*MoveFn)(const GameState *st, void *ctx);
+
+// 3. ساختار بازیکن شامل تابع حرکت، دیتای اختصاصی و مهره (طبق داکیومنت)
+typedef struct {
+    MoveFn move;
+    void *ctx; // برای دیتای خاص بازیکن (مثل فایل یا سطح سختی)
+    char token;
+} Player;
+
+// ---------- توابع مدیریت زمین بازی ----------
+
+GameState* create_board(int r, int c) {
+    GameState *board = (GameState*)malloc(sizeof(GameState));
     board->rows = r;
     board->cols = c;
 
@@ -22,7 +36,7 @@ GameBoard* create_board(int r, int c) {
     return board;
 }
 
-void print_board(GameBoard *board) {
+void print_board(GameState *board) {
     printf("\n=== Connect Four ===\n");
     for (int i = 0; i < board->rows; i++) {
         for (int j = 0; j < board->cols; j++) {
@@ -37,68 +51,70 @@ void print_board(GameBoard *board) {
     printf("\n\n");
 }
 
-int drop_piece(GameBoard *board, int col, char token) {
+int drop_piece(GameState *board, int col, char token) {
     for (int i = board->rows - 1; i >= 0; i--) {
         if (board->grid[i][col] == '.') {
             board->grid[i][col] = token;
             return 1;
         }
     }
+    return 0; // ستون پر است
+}
+
+int check_win(GameState *board, char token) {
+    // افقی
+    for (int i = 0; i < board->rows; i++) {
+        for (int j = 0; j <= board->cols - 4; j++) {
+            if (board->grid[i][j] == token && board->grid[i][j+1] == token &&
+                board->grid[i][j+2] == token && board->grid[i][j+3] == token) return 1;
+        }
+    }
+    // عمودی
+    for (int i = 0; i <= board->rows - 4; i++) {
+        for (int j = 0; j < board->cols; j++) {
+            if (board->grid[i][j] == token && board->grid[i+1][j] == token &&
+                board->grid[i+2][j] == token && board->grid[i+3][j] == token) return 1;
+        }
+    }
+    // قطری (شیب منفی)
+    for (int i = 0; i <= board->rows - 4; i++) {
+        for (int j = 0; j <= board->cols - 4; j++) {
+            if (board->grid[i][j] == token && board->grid[i+1][j+1] == token &&
+                board->grid[i+2][j+2] == token && board->grid[i+3][j+3] == token) return 1;
+        }
+    }
+    // قطری (شیب مثبت)
+    for (int i = 0; i <= board->rows - 4; i++) {
+        for (int j = 3; j < board->cols; j++) {
+            if (board->grid[i][j] == token && board->grid[i+1][j-1] == token &&
+                board->grid[i+2][j-2] == token && board->grid[i+3][j-3] == token) return 1;
+        }
+    }
     return 0;
 }
 
-// تابع جدید برای بررسی برد
-int check_win(GameBoard *board, char token) {
-    // 1. بررسی افقی (چپ به راست)
-    for (int i = 0; i < board->rows; i++) {
-        for (int j = 0; j <= board->cols - 4; j++) {
-            if (board->grid[i][j] == token &&
-                board->grid[i][j+1] == token &&
-                board->grid[i][j+2] == token &&
-                board->grid[i][j+3] == token) {
-                return 1;
-            }
-        }
-    }
+// ---------- توابع بازیکن‌ها ----------
 
-    // 2. بررسی عمودی (بالا به پایین)
-    for (int i = 0; i <= board->rows - 4; i++) {
-        for (int j = 0; j < board->cols; j++) {
-            if (board->grid[i][j] == token &&
-                board->grid[i+1][j] == token &&
-                board->grid[i+2][j] == token &&
-                board->grid[i+3][j] == token) {
-                return 1;
-            }
+// تابع حرکت اختصاصی برای بازیکنِ انسان
+int human_move(const GameState *st, void *ctx) {
+    int selected_col;
+    while (1) {
+        // گرفتن ورودی
+        if (scanf("%d", &selected_col) != 1) {
+            printf("ورودی نامعتبر! لطفا یک عدد وارد کنید: ");
+            while(getchar() != '\n');
+            continue;
         }
-    }
-
-    // 3. بررسی قطری (شیب منفی - از بالا چپ به پایین راست)
-    for (int i = 0; i <= board->rows - 4; i++) {
-        for (int j = 0; j <= board->cols - 4; j++) {
-            if (board->grid[i][j] == token &&
-                board->grid[i+1][j+1] == token &&
-                board->grid[i+2][j+2] == token &&
-                board->grid[i+3][j+3] == token) {
-                return 1;
-            }
+        // اعتبارسنجی اولیه محدوده
+        if (selected_col < 0 || selected_col >= st->cols) {
+            printf("خطا: ستون خارج از محدوده است! انتخاب مجدد (0 تا %d): ", st->cols - 1);
+            continue;
         }
+        return selected_col;
     }
-
-    // 4. بررسی قطری (شیب مثبت - از بالا راست به پایین چپ)
-    for (int i = 0; i <= board->rows - 4; i++) {
-        for (int j = 3; j < board->cols; j++) {
-            if (board->grid[i][j] == token &&
-                board->grid[i+1][j-1] == token &&
-                board->grid[i+2][j-2] == token &&
-                board->grid[i+3][j-3] == token) {
-                return 1;
-            }
-        }
-    }
-
-    return 0; // هیچ حالت بردی پیدا نشد
 }
+
+// ---------- تابع اصلی (Game Engine) ----------
 
 int main() {
     int r, c;
@@ -110,63 +126,54 @@ int main() {
             while(getchar() != '\n');
             continue;
         }
-
-        if (r >= 4 && c < 12 && c > 0) {
-            break;
-        } else {
-            printf("خطا: ابعاد وارد شده با قوانین بازی همخوانی ندارد. دوباره تلاش کنید.\n");
-        }
+        if (r >= 4 && c < 12 && c > 0) break;
+        else printf("خطا: ابعاد وارد شده با قوانین بازی همخوانی ندارد. دوباره تلاش کنید.\n");
     }
 
-    GameBoard *board = create_board(r, c);
+    GameState *board = create_board(r, c);
     print_board(board);
 
-    char current_token = 'X';
+    // مقداردهی اولیه بازیکن‌ها با ساختاری که موتور بازی می‌فهمد
+    Player p1 = { human_move, NULL, 'X' };
+    Player p2 = { human_move, NULL, 'O' };
+
+    Player *players[2] = { &p1, &p2 }; // آرایه‌ای از بازیکنان برای تعویض راحت نوبت
+    int current_player_idx = 0;
+
     int turn = 0;
     int max_turns = r * c;
 
-    // حلقه اصلی بازی
+    // حلقه اصلی موتور بازی
     while (turn < max_turns) {
-        int selected_col;
-        printf("نوبت بازیکن (%c). شماره ستون (0 تا %d) را انتخاب کنید: ", current_token, c - 1);
+        Player *current_player = players[current_player_idx];
 
-        if (scanf("%d", &selected_col) != 1) {
-            printf("ورودی نامعتبر! لطفا یک عدد وارد کنید.\n");
-            while(getchar() != '\n');
-            continue;
-        }
+        printf("نوبت بازیکن (%c). شماره ستون را انتخاب کنید: ", current_player->token);
 
-        if (selected_col < 0 || selected_col >= c) {
-            printf("خطا: شماره ستون خارج از محدوده است! دوباره تلاش کنید.\n");
-            continue;
-        }
+        // صدا زدن تابع حرکت (بدون اینکه موتور بدونه این انسانه یا کامپیوتر)
+        int selected_col = current_player->move(board, current_player->ctx);
 
-        if (drop_piece(board, selected_col, current_token)) {
+        if (drop_piece(board, selected_col, current_player->token)) {
             print_board(board);
 
-            // بررسی برد بلافاصله بعد از افتادن مهره
-            if (check_win(board, current_token)) {
-                printf("\n*** تبریک! بازیکن (%c) برنده شد! ***\n\n", current_token);
-                break; // خروج از حلقه بازی
+            if (check_win(board, current_player->token)) {
+                printf("\n*** تبریک! بازیکن (%c) برنده شد! ***\n\n", current_player->token);
+                break;
             }
 
             turn++;
-            // بررسی مساوی شدن بازی
             if (turn == max_turns) {
                 printf("\n*** بازی مساوی شد! هیچ خانه‌ای خالی نمانده است. ***\n\n");
                 break;
             }
 
-            current_token = (current_token == 'X') ? 'O' : 'X';
+            // عوض کردن نوبت
+            current_player_idx = 1 - current_player_idx;
         } else {
             printf("خطا: این ستون کاملاً پر شده است! ستون دیگری انتخاب کنید.\n");
         }
     }
 
-    // آزادسازی حافظه
-    for (int i = 0; i < board->rows; i++) {
-        free(board->grid[i]);
-    }
+    for (int i = 0; i < board->rows; i++) free(board->grid[i]);
     free(board->grid);
     free(board);
 
