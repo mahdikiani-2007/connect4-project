@@ -1,42 +1,47 @@
+/*******************************************************************************
+ * پروژه پایانی درس برنامه‌نویسی پیشرفته (Advanced Programming Project)
+ *  پروژه: بازی دوز  (Connect Four Game in C)
+ * دانشگاه: دانشگاه شیراز - بخش مهندسی و علوم کامپیوتر و فناوری اطلاعات
+ * استاد : دکتر محمد طاهری
+ * توسعه‌دهنده: مهدی کیانی
+ * نیمسال: بهار ۱۴۰۵
+ * * مخزن گیت‌هاب پروژه (GitHub Repository):
+https://github.com/mahdikiani-2007/connect4-project/
+ *******************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 // ---------- 1. ساختارهای داده (Data Structures) ----------
-// در این بخش ساختارهای اصلی برای نگهداری وضعیت بازی و اطلاعات بازیکنان تعریف شده‌اند.
 
 typedef struct GameState {
-    int rows;          // تعداد سطرهای زمین بازی
-    int cols;          // تعداد ستون‌های زمین بازی
-    char **grid;       // ماتریس دو بعدی (آرایه پویا) برای نگهداری وضعیت خانه‌های بازی
-    int *move_history; // آرایه‌ای برای ذخیره تاریخچه حرکات (شماره ستون‌هایی که مهره در آن‌ها افتاده است)
-    int move_count;    // تعداد کل حرکات انجام شده تا این لحظه (جهت پیمایش تاریخچه)
+    int rows;
+    int cols;
+    char **grid;       // ماتریس دو بعدی برای نگهداری وضعیت خانه‌های بازی
+    int *move_history;
+    int move_count;
 } GameState;
 
-// تعریف یک 'اشاره‌گر به تابع' (Function Pointer) به نام MoveFn.
-// این الگو به ما اجازه می‌دهد تا نحوه انتخاب حرکت (توسط انسان، هوش مصنوعی یا از روی فایل)
-// را به صورت داینامیک (پویا) در زمان اجرا تعیین کنیم و کدهای تکراری ننویسیم.
-// هر تابعی که خروجی int و ورودی‌های (const GameState*, void*) داشته باشد، می‌تواند در این الگو جای بگیرد.
+// تعریف یک 'اشاره‌گر به تابع' به نام MoveFn.
 typedef int (*MoveFn)(const GameState *st, void *ctx);
 
 typedef struct {
     MoveFn move;       // اشاره‌گر به تابعی که منطق حرکت این بازیکن را پیاده‌سازی می‌کند
-    void *ctx;         // متغیر context (متن/زمینه): برای ارسال داده‌های اختصاصی (مثل اشاره‌گرِ فایل یا سطح سختی هوش مصنوعی)
-    char token;        // کاراکتر نمایشی مهره بازیکن در زمین بازی (مثلاً 'X' یا 'O')
+    void *ctx;         
+    char token;        // کاراکتر نمایشی مهره بازیکن
 } Player;
 
 // ---------- 2. توابع مدیریت زمین بازی (Board Management) ----------
-// این توابع مسئول تخصیص حافظه، مقداردهی اولیه، نمایش در کنسول و اعمال تغییرات روی زمین هستند.
 
 GameState* create_board(int r, int c) {
-    // تخصیص حافظه پویا (Dynamic Memory Allocation) برای ساختار وضعیت بازی
+    // تخصیص حافظه داینامیک برای ساختار وضعیت بازی
     GameState *board = (GameState*)malloc(sizeof(GameState));
     board->rows = r;
     board->cols = c;
     board->move_count = 0;
 
-    // حداکثر تعداد حرکات ممکن برابر با مساحت کل زمین (تعداد سطر × تعداد ستون) است
     board->move_history = (int*)malloc(r * c * sizeof(int));
 
     // تخصیص حافظه برای ماتریس دو بعدی زمین بازی.
@@ -45,7 +50,7 @@ GameState* create_board(int r, int c) {
     for (int i = 0; i < r; i++) {
         board->grid[i] = (char*)malloc(c * sizeof(char));
         for (int j = 0; j < c; j++) {
-            board->grid[i][j] = '.'; // پر کردن اولیه تمامی خانه‌ها با کاراکتر نقطه (نشانگر خانه خالی)
+            board->grid[i][j] = '.'; 
         }
     }
     return board;
@@ -60,7 +65,7 @@ void print_board(GameState *board) {
         printf("\n");
     }
     printf("====================\n");
-    // چاپ شماره ستون‌ها در پایین زمین بازی جهت راهنمایی کاربر
+    // چاپ شماره ستون‌ها در پایین زمین بازی برای راهنمایی کاربر
     for (int j = 0; j < board->cols; j++) {
         printf("%d ", j);
     }
@@ -68,21 +73,20 @@ void print_board(GameState *board) {
 }
 
 int drop_piece(GameState *board, int col, char token) {
-    // در بازی دوز ایستاده، مهره‌ها تحت تاثیر جاذبه به پایین‌ترین خانه خالی ممکن می‌روند.
+    // شبیه ساز جاذبه زمین
     // بنابراین از پایین‌ترین سطر (rows - 1) به سمت بالا چک می‌کنیم.
     for (int i = board->rows - 1; i >= 0; i--) {
         if (board->grid[i][col] == '.') {
-            board->grid[i][col] = token; // قرار دادن مهره در اولین جای خالی یافت شده
-            return 1; // موفقیت آمیز بودن حرکت
+            board->grid[i][col] = token; // قرار دادن مهره در اولین جای خالی
+            return 1; 
         }
     }
-    return 0; // در صورتی که حلقه تمام شود و جای خالی پیدا نشود، یعنی ستون پر است
+    return 0; // پر بودن ستون و عدم امکان انداختن مهره
 }
 
-// این تابع پس از هر حرکت فراخوانی می‌شود تا بررسی کند آیا بازیکن (با مهره مشخص شده) برنده شده است یا خیر.
+// تابع برای چک کردن وضعیت برد
 int check_win(GameState *board, char token) {
     // ۱. بررسی خطوط افقی: یافتن ۴ مهره همرنگ مجاور در یک سطر
-    // محدوده جستجو در ستون‌ها به (cols - 4) محدود می‌شود تا از خطای Out of Bounds جلوگیری شود
     for (int i = 0; i < board->rows; i++) {
         for (int j = 0; j <= board->cols - 4; j++) {
             if (board->grid[i][j] == token && board->grid[i][j+1] == token &&
@@ -90,7 +94,6 @@ int check_win(GameState *board, char token) {
         }
     }
     // ۲. بررسی خطوط عمودی: یافتن ۴ مهره همرنگ مجاور در یک ستون
-    // محدوده جستجو در سطرها به (rows - 4) محدود می‌شود
     for (int i = 0; i <= board->rows - 4; i++) {
         for (int j = 0; j < board->cols; j++) {
             if (board->grid[i][j] == token && board->grid[i+1][j] == token &&
@@ -111,17 +114,15 @@ int check_win(GameState *board, char token) {
                 board->grid[i+2][j-2] == token && board->grid[i+3][j-3] == token) return 1;
         }
     }
-    return 0; // در صورتی که هیچ الگوی بردی یافت نشد
+    return 0; // هیچ حالت بردی یافت نشد
 }
 
-// تابعی ساده برای بررسی اینکه آیا ستون ظرفیت خالی برای دریافت مهره جدید دارد یا خیر
-// (اگر بالاترین سطر در یک ستون خالی باشد، آن ستون ظرفیت دارد)
+// ایا ستون انتخاب شده برای انداختن مهره خالیه یا نه
 int can_drop(const GameState *board, int col) {
     return board->grid[0][col] == '.';
 }
 
 // ---------- 3. توابع سیستم ذخیره و بازپخش (Save & Replay) ----------
-// این بخش از فایل‌های متنی برای نگهداری داده‌های بازی (File Handling) استفاده می‌کند.
 
 // تابع ذخیره بازی در فایل دیتابیس (database.txt)
 // فرمت ذخیره‌سازی: [GameName] [Rows] [Cols] [MoveCount] [Move1] [Move2] ...
@@ -135,33 +136,31 @@ void save_game(GameState *board) {
         printf("Enter a name for the game (without spaces, e.g. game1): ");
         scanf("%s", game_name);
 
-        // باز کردن فایل در حالت "a" (Append).
-        // در این حالت اطلاعات در انتهای فایل نوشته می‌شوند تا اطلاعات بازی‌های قبلی پاک نشود.
+        // در این حالت اطلاعات در انتهای فایل نوشته میشه تا اطلاعات بازی‌های قبلی پاک نشه.
         FILE *db = fopen("database.txt", "a");
         if (db == NULL) {
             printf("Error creating the database file!\n");
             return;
         }
 
-        // ذخیره متادیتا (اطلاعات پایه) بازی
         fprintf(db, "%s %d %d %d", game_name, board->rows, board->cols, board->move_count);
-        // پیمایش آرایه تاریخچه و ذخیره ستون‌های انتخاب شده به ترتیب
+
         for (int i = 0; i < board->move_count; i++) {
             fprintf(db, " %d", board->move_history[i]);
         }
-        fprintf(db, "\n"); // رفتن به خط جدید برای جلوگیری از تداخل با بازی‌هایی که در آینده ذخیره می‌شوند
-        fclose(db); // آزادسازی منابع فایل
+        fprintf(db, "\n"); // رفتن به خط جدید برای جلوگیری از بهم ریختگی داده‌ها
+        fclose(db); // آزادسازی منابع
         printf("Game successfully saved in database.txt!\n");
     }
 }
 
-// تابع بازپخش (Replay) مرحله به مرحله یک بازی ذخیره شده
+// تابع بازپخش بازی ذخیره شده
 void replay_game() {
     char search_name[50], current_name[50];
     int r, c, count, move_col;
     int found = 0;
 
-    // باز کردن فایل در حالت "r" (Read) برای خواندن اطلاعات
+    // باز کردن فایل دیتابیس برای خواندن اطلاعات بازی‌ها
     FILE *db = fopen("database.txt", "r");
     if (db == NULL) {
         printf("No database found. Please save a game first.\n");
@@ -175,9 +174,9 @@ void replay_game() {
     // تابع fscanf تا زمانی که ۴ متغیر اصلی (متادیتا) را با موفقیت در ابتدای خط بخواند، حلقه را ادامه می‌دهد.
     while (fscanf(db, "%s %d %d %d", current_name, &r, &c, &count) == 4) {
         if (strcmp(current_name, search_name) == 0) {
-            found = 1; // بازی مورد نظر پیدا شد
+            found = 1;
             GameState *board = create_board(r, c); // ساخت یک زمین خالی بر اساس ابعاد ذخیره شده
-            char current_token = 'X'; // همیشه اولین حرکت با مهره 'X' است
+            char current_token = 'X'; 
 
             printf("\n--- Starting Replay: %s ---\n", search_name);
             print_board(board);
@@ -189,27 +188,25 @@ void replay_game() {
                 printf("Move %d: Player (%c) chose column %d.\n", i + 1, current_token, move_col);
                 printf("(Press Enter to see the next move...)");
 
-                // پاکسازی بافر ورودی تا مطمئن شویم فقط منتظر فشردن دکمه Enter جدید می‌ماند
+                // پاک کردن بافر
                 while(getchar() != '\n');
-                getchar(); // توقف موقت برنامه منتظر ماندن برای فشردن Enter
-
+                getchar(); // منتظر فشردن دکمه اینتر 
                 drop_piece(board, move_col, current_token);
                 print_board(board);
 
-                // جابجایی نوبت بازیکن برای حرکت بعدی در بازپخش
+                // جابجایی نوبت بازیکن
                 current_token = (current_token == 'X') ? 'O' : 'X';
             }
             printf("--- End of Replay ---\n");
 
-            // آزادسازی حافظه (Free) برای جلوگیری از نشت حافظه (Memory Leak)
+            // آزاد کردن حافظه برای جلوگیری از مموری لیک
             for (int i = 0; i < board->rows; i++) free(board->grid[i]);
             free(board->grid);
             free(board->move_history);
             free(board);
-            break; // پس از یافتن و پخش بازی، از حلقه جستجو خارج می‌شویم
+            break; 
         } else {
-            // اگر خطی که خواندیم متعلق به بازی موردنظر ما نبود،
-            // باید اعداد باقیمانده‌ی آن خط (حرکات) را بخوانیم تا اشاره‌گر فایل به ابتدای خط بازی بعدی برسد
+            // خوندن بقیه حرکات بازی ای که بازی مورد نظر ما نبود
             for (int i = 0; i < count; i++) fscanf(db, "%d", &move_col);
         }
     }
@@ -219,19 +216,18 @@ void replay_game() {
 }
 
 // ---------- 4. توابع حرکت بازیکن‌ها (Player Moves) ----------
-// تمام این توابع یک قالب (Signature) یکسان دارند تا بتوانند به عنوان اشاره‌گر به تابع MoveFn استفاده شوند.
 
-// تابع دریافت حرکت از کاربر انسانی از طریق کیبورد
+// تابع دریافت حرکت از کاربر 
 int human_move(const GameState *st, void *ctx) {
     int selected_col;
     while (1) {
         // اطمینان از اینکه ورودی یک عدد صحیح است
         if (scanf("%d", &selected_col) != 1) {
             printf("Invalid input! Please enter a number: ");
-            while(getchar() != '\n'); // پاکسازی کاراکترهای نامعتبر و حروف از بافر ورودی
+            while(getchar() != '\n'); 
             continue;
         }
-        // بررسی اینکه آیا ستون انتخاب شده در بازه مجاز ابعاد زمین قرار دارد
+        // چک کردن وجود داشتن ستون انتخاب شده
         if (selected_col < 0 || selected_col >= st->cols) {
             printf("Error: Column out of range! (0 to %d): ", st->cols - 1);
             continue;
@@ -240,41 +236,41 @@ int human_move(const GameState *st, void *ctx) {
     }
 }
 
-// تابع دریافت حرکت از طریق خواندن از یک فایل متنی مجزا (حالت Human vs File)
+// تابع دریافت حرکت از طریق خواندن از یک فایل متنی مجزا 
 int file_move(const GameState *st, void *ctx) {
-    FILE *file = (FILE*)ctx; // تبدیل (Cast) متغیر عمومی ctx به اشاره‌گر از نوع فایل
+    FILE *file = (FILE*)ctx;
     int selected_col;
 
     // تلاش برای خواندن یک عدد از فایل
     if (fscanf(file, "%d", &selected_col) == 1) {
         printf("Move read from file: %d\n", selected_col);
-        if (selected_col < 0 || selected_col >= st->cols) return -1; // اگر ستون خارج از محدوده بود متوقف می‌شود
+        if (selected_col < 0 || selected_col >= st->cols) return -1; // توقف درصورت خارج بودن از محدوده
         return selected_col;
     }
-    return -1; // نشان‌دهنده رسیدن به انتهای فایل (EOF) یا بروز خطا در خواندن اطلاعات
+    return -1; // بروز خطا یا به پایان رسیدن فایل
 }
 
-// تابع تولید حرکت توسط هوش مصنوعی (کامپیوتر)
+// تابع تولید حرکت توسط هوش مصنوعی 
 int computer_move(const GameState *st, void *ctx) {
     int level = *(int*)ctx; // بازیابی سطح سختی بازی با Cast کردن اشاره‌گر ctx به int
     char ai_token = 'O';    // فرض بر این است که کامپیوتر همیشه بازیکن دوم است
-    char human_token = 'X'; // مهره رقیب انسانی
+    char human_token = 'X'; // مهره انسان
 
     if (level == 2) { // منطق حالت سخت (Hard Mode)
         // اولویت اول (حمله): آیا کامپیوتر می‌تواند با انتخاب یکی از ستون‌ها در همین حرکت برنده شود؟
         for (int c = 0; c < st->cols; c++) {
             if (can_drop(st, c)) {
                 int r;
-                // شبیه‌سازی حرکت: یافتن پایین‌ترین خانه در ستون
+                // شبیه‌سازی حرکت
                 for (r = st->rows - 1; r >= 0; r--) if (st->grid[r][c] == '.') break;
 
-                st->grid[r][c] = ai_token; // قرار دادن موقت مهره در خانه
+                st->grid[r][c] = ai_token; 
                 if (check_win((GameState*)st, ai_token)) {
-                    st->grid[r][c] = '.';  // بازگردانی وضعیت به حالت قبل (لغو شبیه‌سازی)
+                    st->grid[r][c] = '.'; 
                     printf("Computer made a smart move (column %d)\n", c);
                     return c; // انتخاب این ستون برای پیروزی قطعی
                 }
-                st->grid[r][c] = '.'; // بازگردانی وضعیت در صورت عدم برد
+                st->grid[r][c] = '.'; 
             }
         }
 
@@ -285,7 +281,7 @@ int computer_move(const GameState *st, void *ctx) {
                 int r;
                 for (r = st->rows - 1; r >= 0; r--) if (st->grid[r][c] == '.') break;
 
-                st->grid[r][c] = human_token; // شبیه‌سازی حرکت برای حریف
+                st->grid[r][c] = human_token; 
                 if (check_win((GameState*)st, human_token)) {
                     st->grid[r][c] = '.';
                     printf("Computer defended (column %d)\n", c);
@@ -296,8 +292,7 @@ int computer_move(const GameState *st, void *ctx) {
         }
     }
 
-    // منطق حالت آسان (Easy Mode) یا عدم وجود موقعیت بحرانی (دفاع/حمله) در حالت سخت:
-    // یک ستون تصادفی (Random) را انتخاب می‌کند که هنوز پر نشده است.
+    // منطق حالت آسون یا عدم وجود موقعیت بحرانی (دفاع/حمله) در حالت سخت:
     int col;
     do { col = rand() % st->cols; } while (!can_drop(st, col));
     printf("Computer chose column %d.\n", col);
@@ -307,8 +302,7 @@ int computer_move(const GameState *st, void *ctx) {
 // ---------- 5. تابع اصلی (Main) ----------
 
 int main() {
-    // مقداردهی اولیه به هسته (Seed) تولیدکننده اعداد تصادفی با استفاده از زمان فعلی سیستم
-    // تا الگوهای تصادفی در هر بار اجرای برنامه متفاوت باشند.
+    // تولید اعداد تصادفی بر اساس زمان فعلی سیستم
     srand(time(NULL));
 
     int mode;
@@ -325,7 +319,7 @@ int main() {
         return 1;
     }
 
-    // اگر کاربر درخواست بازپخش کرد، فرآیند را به تابع مربوطه سپرده و سپس برنامه را خاتمه می‌دهیم
+    // پاس دادن به تابع مربوطه درصورت درخواست کاربر باری ریپلای
     if (mode == 4) {
         replay_game();
         return 0;
@@ -340,7 +334,7 @@ int main() {
             while(getchar() != '\n'); // پاکسازی بافر
             continue;
         }
-        if (r >= 4 && c < 12 && c > 0) break; // شرایط صحیح ابعاد
+        if (r >= 4 && c < 12 && c > 0) break; // شروط صحیح ابعاد
         else printf("Error: Dimensions do not match the rules.\n");
     }
 
@@ -348,7 +342,7 @@ int main() {
     GameState *board = create_board(r, c);
     print_board(board);
 
-    // تعریف اطلاعات دو بازیکن با مقادیر پیش‌فرض (بازی دو نفره انسانی)
+    // تعریف اطلاعات دو بازیکن 
     Player p1 = { human_move, NULL, 'X' };
     Player p2 = { human_move, NULL, 'O' };
     FILE *inputFile = NULL;
@@ -381,60 +375,59 @@ int main() {
 
     // ساخت یک آرایه از اشاره‌گرها به بازیکنان جهت ساده‌سازی مدیریت نوبت در حلقه بازی
     Player *players[2] = { &p1, &p2 };
-    int current_player_idx = 0; // متغیر ایندکس: 0 نشان‌دهنده نوبت p1 و 1 نشان‌دهنده نوبت p2
-    int turn = 0; // شمارشگر مجموع حرکات بازی تا این لحظه
-    int max_turns = r * c; // شرط پایان در حالت تساوی (پر شدن کامل جدول)
+    int current_player_idx = 0; 
+    int turn = 0; // شمارشگر مجموع حرکات بازی 
+    int max_turns = r * c; // شرط پایان در حالت تساوی 
 
-    // حلقه اصلی (Main Game Loop)
+    // حلقه اصلی
     while (turn < max_turns) {
         Player *current_player = players[current_player_idx]; // اشاره‌گر به بازیکن فعلی
 
-        // صرفاً زمانی که بازیکن از نوع انسانی است، اعلان نوبت چاپ می‌شود تا خروجی گرافیکی نامنظم نشود
+        // صرفاً زمانی که بازیکن انسان است، اعلان نوبت چاپ میشه
         if (mode == 1 || current_player_idx == 0) {
             printf("Player (%c)'s turn: ", current_player->token);
         }
 
-        // فراخوانی تابع حرکت بازیکنِ فعلی بصورت داینامیک توسط اشاره‌گر (Polymorphism ساده در زبان C)
+        // فراخوانی تابع حرکت بازیکنِ فعلی 
         int selected_col = current_player->move(board, current_player->ctx);
 
-        // اگر تابع حرکت مقدار منفی بازگرداند (معمولاً بخاطر پایان یافتن خطوط درون فایل ورودی)، بازی پایان می‌یابد
+        // پایان بازی در صورت بروز خطا یا به پایان رسیدن فایل حرکات
         if (selected_col == -1) break;
 
-        // اقدام به انداختن مهره داخل ستون انتخاب شده
+        // انداختن مهراه داخل ستون
         if (drop_piece(board, selected_col, current_player->token)) {
 
-            // ثبت حرکت بازیکن در آرایه پویا جهت استفاده در سیستم Save/Replay
+            // ثبت حرکت بازیکن ها برای ذخیره و بازپخش بازی
             board->move_history[board->move_count++] = selected_col;
 
-            print_board(board); // تازه‌سازی صفحه و نمایش زمین جدید
+            print_board(board);
 
-            // پس از هر حرکت موفق باید فوراً بررسی کنیم که آیا این حرکت منجر به پیروزی شده است؟
+            // چک کردن وضعیت برد بعد از هر حرکت
             if (check_win(board, current_player->token)) {
                 printf("\n*** Player (%c) wins! ***\n", current_player->token);
-                break; // شکستن حلقه و پایان بازی
+                break; // پایان بازی در صورت برد
             }
 
             turn++;
-            if (turn == max_turns) { // رسیدن به بن‌بست و پر شدن جدول
+            if (turn == max_turns) { //پرشدن کل زمین بازی 
                 printf("\n*** The game is a draw! ***\n");
                 break;
             }
 
-            // سوییچ کردن نوبت بازیکن بعدی (اگر 0 باشد تبدیل به 1 می‌شود و بالعکس)
+            // سوییچ کردن نوبت بازیکن بعدی 
             current_player_idx = 1 - current_player_idx;
         } else {
-            // هندلینگ خطا: در صورتی که ستون انتخاب شده کاملاً پر باشد
+            // اگر ستون انتخاب شده پر باشه
             if (current_player->move == human_move) {
                 printf("Error: This column is full!\n");
             }
         }
     }
 
-    // فراخوانی تابع برای پیشنهاد ذخیره‌سازی این بازی در فایل دیتابیس
+    // فراخوانی تابع برای پیشنهاد ذخیره‌سازی این بازی 
     save_game(board);
 
-    // فرآیند پایانی (Clean-up): بستن دسترسی فایل‌ها و آزادسازی حافظه‌های تخصیص یافته روی Heap
-    // تا از Memory Leak در سیستم‌عامل جلوگیری شود.
+    // بستن دسترسی فایل ها و خالی کردن حافظه اختصاص یافته بدلیل جلوگیری از مموری لیک
     if (inputFile != NULL) fclose(inputFile);
 
     for (int i = 0; i < board->rows; i++) free(board->grid[i]);
@@ -442,5 +435,5 @@ int main() {
     free(board->move_history);
     free(board);
 
-    return 0; // خروج موفقیت‌آمیز از برنامه
+    return 0; // خروج از برنامه
 }
